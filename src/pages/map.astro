@@ -1,11 +1,273 @@
 ---
 import Base from "../layouts/Base.astro";
+import { planets } from "../data/planets";
 ---
 
 <Base title="Star Map | Tyler Irby">
-    <main style="padding: 2rem;">
-        <h1>STAR MAP</h1>
-        <p>The planets go here in a later step.</p>
-        <a href="/" style="color: var(--holo);">Back to landing</a>
+    <main class="map-page">
+        <div id="map-stage" class="map-stage" aria-hidden="true"></div>
+
+        <div class="labels">
+            {
+                planets.map((p) => (
+                    <button
+                        class="planet-label"
+                        data-planet={p.id}
+                        type="button"
+                    >
+                        <span class="name">{p.name}</span>
+                        <span class="field">{p.field}</span>
+                    </button>
+                ))
+            }
+        </div>
+
+        <header class="top-bar">
+            <a href="/" class="back">&lt; RETURN TO EARTH</a>
+            <span>STATUS: <b>ONLINE</b></span>
+        </header>
+
+        <p class="hint">SELECT A SECTOR</p>
+
+        <aside id="planet-card" class="card" hidden aria-live="polite">
+            <p class="card-field" id="card-field"></p>
+            <h2 id="card-name"></h2>
+            <p class="card-blurb" id="card-blurb"></p>
+            <div class="card-actions">
+                <button type="button" id="card-enter">ENTER SECTOR</button>
+                <button type="button" id="card-close" class="ghost"
+                    >CLOSE</button
+                >
+            </div>
+        </aside>
     </main>
 </Base>
+
+<style>
+    .map-page {
+        position: relative;
+        height: 100svh;
+    }
+    .map-stage {
+        position: absolute;
+        inset: 0;
+    }
+    .map-stage :global(canvas) {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    .top-bar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 2;
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: 1.25rem 1.5rem;
+        font-size: 0.95rem;
+        color: var(--holo-dim);
+    }
+    .top-bar b {
+        color: var(--holo);
+        font-weight: 700;
+    }
+    .back {
+        color: var(--holo);
+        text-decoration: none;
+    }
+    .back:hover {
+        color: var(--holo-bright);
+        text-shadow: 0 0 10px var(--holo-glow);
+    }
+
+    .hint {
+        position: absolute;
+        bottom: 1.5rem;
+        left: 0;
+        right: 0;
+        margin: 0;
+        text-align: center;
+        font-family: var(--font-display);
+        font-size: 0.8rem;
+        letter-spacing: 0.3em;
+        color: var(--holo-dim);
+    }
+
+    /* ----- Planet labels ----- */
+    .labels {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        overflow: hidden;
+        pointer-events: none;
+    }
+    .planet-label {
+        position: absolute;
+        left: 0;
+        top: 0;
+        pointer-events: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.15rem;
+        padding: 0.35rem 0.8rem;
+        background: rgba(2, 10, 22, 0.55);
+        border: 1px solid rgba(79, 209, 255, 0.35);
+        border-radius: 2px;
+        color: var(--holo);
+        font: inherit;
+        white-space: nowrap;
+        cursor: pointer;
+        transition:
+            border-color 0.2s,
+            background 0.2s,
+            box-shadow 0.2s;
+    }
+    .name {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 0.85rem;
+        letter-spacing: 0.24em;
+        color: var(--holo-bright);
+    }
+    .field {
+        font-size: 0.8rem;
+        letter-spacing: 0.18em;
+        color: var(--holo-dim);
+    }
+    .planet-label.is-hover,
+    .planet-label.is-selected,
+    .planet-label:focus-visible {
+        outline: none;
+        border-color: var(--holo-bright);
+        background: rgba(79, 209, 255, 0.14);
+        box-shadow: 0 0 18px var(--holo-glow);
+    }
+
+    /* ----- Info card ----- */
+    .card {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 3.4rem;
+        margin: 0 auto;
+        z-index: 3;
+        width: min(92vw, 440px);
+        padding: 1rem 1.25rem 1.1rem;
+        background: rgba(2, 10, 22, 0.78);
+        border: 1px solid var(--holo);
+        box-shadow:
+            0 0 28px var(--holo-glow),
+            inset 0 0 24px rgba(79, 209, 255, 0.08);
+        backdrop-filter: blur(6px);
+        animation: fade-in 0.25s ease both;
+    }
+    .card[hidden] {
+        display: none;
+    }
+    .card-field {
+        margin: 0;
+        font-size: 0.85rem;
+        letter-spacing: 0.22em;
+        color: var(--holo-dim);
+    }
+    .card h2 {
+        margin: 0.2rem 0 0.4rem;
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 1.6rem;
+        letter-spacing: 0.18em;
+        color: var(--holo-bright);
+        text-shadow: 0 0 12px var(--holo-glow);
+    }
+    .card-blurb {
+        margin: 0 0 1rem;
+        color: var(--holo);
+    }
+    .card-actions {
+        display: flex;
+        gap: 0.75rem;
+    }
+    .card-actions button {
+        padding: 0.65rem 1.3rem;
+        font-family: var(--font-display);
+        font-size: 0.75rem;
+        letter-spacing: 0.2em;
+        color: var(--holo-bright);
+        background: rgba(79, 209, 255, 0.1);
+        border: 1px solid var(--holo);
+        border-radius: 2px;
+        cursor: pointer;
+        transition:
+            background 0.2s,
+            box-shadow 0.2s;
+    }
+    .card-actions button:hover {
+        background: rgba(79, 209, 255, 0.24);
+        box-shadow: 0 0 18px var(--holo-glow);
+    }
+    .card-actions .ghost {
+        border-color: rgba(79, 209, 255, 0.35);
+        color: var(--holo-dim);
+    }
+
+    @media (max-width: 700px) {
+        .field {
+            display: none;
+        }
+    }
+</style>
+
+<script>
+    import { createStarMap } from "../scripts/starmap";
+    import { planets } from "../data/planets";
+
+    const stage = document.getElementById("map-stage");
+    const card = document.getElementById("planet-card") as HTMLElement;
+    const cardName = document.getElementById("card-name") as HTMLElement;
+    const cardField = document.getElementById("card-field") as HTMLElement;
+    const cardBlurb = document.getElementById("card-blurb") as HTMLElement;
+    const enterButton = document.getElementById(
+        "card-enter",
+    ) as HTMLButtonElement;
+    const closeButton = document.getElementById(
+        "card-close",
+    ) as HTMLButtonElement;
+
+    const labels = new Map<string, HTMLElement>();
+    document.querySelectorAll<HTMLElement>("[data-planet]").forEach((el) => {
+        if (el.dataset.planet) labels.set(el.dataset.planet, el);
+    });
+
+    let currentId: string | null = null;
+
+    const map = stage
+        ? createStarMap(stage, planets, {
+              labels,
+              onSelect(planet) {
+                  currentId = planet ? planet.id : null;
+                  card.hidden = !planet;
+                  if (planet) {
+                      cardName.textContent = planet.name;
+                      cardField.textContent = planet.field;
+                      cardBlurb.textContent = planet.blurb;
+                  }
+              },
+          })
+        : undefined;
+
+    closeButton.addEventListener("click", () => map?.select(null));
+    window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") map?.select(null);
+    });
+
+    enterButton.addEventListener("click", () => {
+        // Step 5 turns this into the zoom down to the planet's surface.
+        console.log("Enter sector:", currentId);
+    });
+</script>

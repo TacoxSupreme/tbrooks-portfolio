@@ -10,7 +10,7 @@ import Base from "../layouts/Base.astro";
 		</header>
 
 		<section class="center">
-			<div class="earth-stage" aria-hidden="true">
+			<div class="earth-stage" id="earth-stage" aria-hidden="true">
 				<div class="ring ring-1"></div>
 				<div class="ring ring-2"></div>
 				<div class="ring ring-3"></div>
@@ -60,9 +60,15 @@ import Base from "../layouts/Base.astro";
 		gap: 1rem;
 	}
 
+	.earth-stage :global(canvas) {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+	}
 	.earth-stage {
 		position: relative;
-		width: min(60vw, 320px);
+		width: min(70vw, 440px);
 		aspect-ratio: 1;
 		margin-bottom: 0.5rem;
 	}
@@ -75,7 +81,7 @@ import Base from "../layouts/Base.astro";
 			inset 0 0 18px var(--holo-glow);
 	}
 	.ring-1 {
-		inset: 18%;
+		inset: 12%;
 		opacity: 0.9;
 	}
 	.ring-2 {
@@ -157,6 +163,11 @@ import Base from "../layouts/Base.astro";
 </style>
 
 <script>
+	import { createEarth } from "../scripts/earth";
+
+	const stage = document.getElementById("earth-stage");
+	if (stage) createEarth(stage);
+
 	const button = document.getElementById("activate") as HTMLButtonElement;
 	const log = document.getElementById("boot-log") as HTMLUListElement;
 	const status = document.getElementById("status") as HTMLElement;

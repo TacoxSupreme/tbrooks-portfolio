@@ -1,0 +1,87 @@
+:root {
+    --bg-0: #02060f;
+    --bg-1: #06203d;
+    --holo: #4fd1ff;
+    --holo-bright: #c4f0ff;
+    --holo-dim: #1f6f9c;
+    --holo-glow: rgba(79, 209, 255, 0.45);
+    --font-display: 'Orbitron', sans-serif;
+    --font-body: 'Rajdhani', sans-serif;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    margin: 0;
+    height: 100%;
+}
+
+body {
+    background: radial-gradient(ellipse at 50% 45%, var(--bg-1) 0%, var(--bg-0) 72%);
+    color: var(--holo);
+    font-family: var(--font-body);
+    font-weight: 500;
+    font-size: 1.15rem;
+    letter-spacing: 0.04em;
+    overflow: hidden;
+}
+
+/* Faint tiled stars. Step 3 replaces these with real 3D stars. */
+.stars {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.55;
+    background-size: 200px 200px;
+    background-image:
+        radial-gradient(1px 1px at 20px 30px, #ffffff, transparent),
+        radial-gradient(1px 1px at 90px 120px, #9fdcff, transparent),
+        radial-gradient(1.5px 1.5px at 160px 60px, #ffffff, transparent),
+        radial-gradient(1px 1px at 130px 170px, #7fc8ee, transparent);
+}
+
+/* Thin horizontal lines that give the screen a projected look. */
+.scanlines {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    mix-blend-mode: screen;
+    background: repeating-linear-gradient(0deg,
+            rgba(79, 209, 255, 0.05) 0,
+            rgba(79, 209, 255, 0.05) 1px,
+            transparent 1px,
+            transparent 3px);
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+        transform: translateY(4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    *,
+    *::before,
+    *::after {
+        animation: none !important;
+        transition: none !important;
+    }
+}
