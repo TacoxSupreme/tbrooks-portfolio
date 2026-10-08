@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { HOLO, makeGlobeBody, makeGrid, makeDotMaterial } from './earth';
+import { HOLO, makeGlobeBody, makeGrid, makeDotMaterial, latLonToVector3 } from './earth';
 import type { Planet } from '../data/planets';
+import type { Base } from '../data/bases'; 
 
 const CAMERA_HEIGHT = 13;  // higher = more top-down view
 const CAMERA_DISTANCE = 9; // how far back from the center
@@ -57,7 +58,7 @@ function circleLine(radius: number, material: THREE.Material, segments = 128): T
 }
 
 function makePlanetDots(planet: Planet): THREE.Points {
-    const total = 4200;
+    const total = 2000;
     const golden = Math.PI * (3 - Math.sqrt(5)); // spreads points evenly over a sphere
     const kept: number[] = [];
 
@@ -93,13 +94,68 @@ function makeRing(planet: Planet): THREE.Group {
     return group;
 }
 
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
+
+interface BaseEntry {
+    base: Base;
+    marker: THREE.Group;
+    ringMaterial: THREE.MeshBasicMaterial;
+    pulse: THREE.Mesh;
+    pulseMaterial: THREE.MeshBasicMaterial;
+    beamMaterial: THREE.LineBasicMaterial;
+    hit: THREE.Mesh; // invisible bubble used for hovering and clicking
+    glow: number;    // 0 = calm, 1 = highlighted
+    phase: number;   // staggers the pulse so markers don't all ripple together
+}
+
+function holoMaterial(color: number, opacity: number): THREE.MeshBasicMaterial {
+    return new THREE.MeshBasicMaterial({
+        color,
+        opacity,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+    });
+}
+
+function makeBaseMarker(base: Base, surfaceRadius: number, size: number): BaseEntry {
+    const marker = new THREE.Group();
+    const position = latLonToVector3(base.lat, base.lon, surfaceRadius);
+    marker.position.copy(position);
+    // Point the marker's +Z axis straight out of the surface.
+    marker.quaternion.setFromUnitVectors(Z_AXIS, position.clone().normalize());
+
+    const ringMaterial = holoMaterial(HOLO, 0.8);
+    const pulseMaterial = holoMaterial(HOLO, 0.5);
+    const beamMaterial = new THREE.LineBasicMaterial({ color: 0xb8ecff, transparent: true, opacity: 0.7 });
+
+    const ring = new THREE.Mesh(new THREE.RingGeometry(size * 0.78, size, 48), ringMaterial);
+    const core = new THREE.Mesh(new THREE.CircleGeometry(size * 0.28, 24), holoMaterial(0xb8ecff, 0.95));
+    const pulse = new THREE.Mesh(new THREE.RingGeometry(size * 0.92, size, 48), pulseMaterial);
+    const beam = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, size * 3)]),
+        beamMaterial,
+    );
+    const hit = new THREE.Mesh(
+        new THREE.SphereGeometry(size * 1.7, 12, 12),
+        new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }),
+    );
+    hit.userData.baseId = base.id;
+
+    marker.add(ring, core, pulse, beam, hit);
+    return { base, marker, ringMaterial, pulse, pulseMaterial, beamMaterial, hit, glow: 0, phase: Math.random() };
+}
 interface PlanetEntry {
     planet: Planet;
     group: THREE.Group;                // sits at the planet's spot on the map
     spin: THREE.Group;                 // turns
     dotMaterial: THREE.ShaderMaterial; // the glowing land dots
     hit: THREE.Mesh;                   // invisible bubble used for hovering and tapping
-    glow: number;                      // 0 = calm, 1 = highlighted (eases between the two)
+    layer: THREE.Group;                // holds this planet's base markers
+    glow: number;                      // 0 = calm, 1 = highlighted
+    dim: number;                       // 1 while another planet is being visited
+    reveal: number;                    // 0..1, how far the base markers have appeared
 }
 
 function buildPlanet(planet: Planet): PlanetEntry {
@@ -126,7 +182,15 @@ function buildPlanet(planet: Planet): PlanetEntry {
     hit.userData.planetId = planet.id;
     group.add(hit);
 
-    return { planet, group, spin, dotMaterial: dots.material as THREE.ShaderMaterial, hit, glow: 0 };
+    // Base markers live here. This layer doesn't spin, so markers hold still while you browse.
+    const layer = new THREE.Group();
+    layer.visible = false;
+    group.add(layer);
+
+    return {
+        planet, group, spin, dotMaterial: dots.material as THREE.ShaderMaterial,
+        hit, layer, glow: 0, dim: 0, reveal: 0,
+    };
 }
 
 function buildHub(): { group: THREE.Group; rings: THREE.LineLoop[] } {
@@ -181,19 +245,26 @@ function makeStars(count = 1600): THREE.Points {
 }
 
 // ---------- The scene ----------
-// ---------- The scene ----------
 export interface StarMapOptions {
-    labels?: Map<string, HTMLElement>;          // one label element per planet id
-    onSelect?: (planet: Planet | null) => void; // called when a planet is picked or cleared
+    labels?: Map<string, HTMLElement>;      // one label element per planet id
+    baseLabels?: Map<string, HTMLElement>;  // one label element per base id
+    onSelect?: (planet: Planet | null) => void;
+    onFocus?: (planet: Planet | null) => void;     // fired when you fly down to or leave a planet
+    onBaseSelect?: (base: Base | null) => void;
 }
 
 export interface StarMapApi {
     select: (id: string | null) => void;
+    enter: (id: string) => void;
+    exit: () => void;
+    selectBase: (id: string | null) => void;
+    back: () => void; // one step back: close base, else leave planet, else clear selection
 }
 
 export function createStarMap(
     container: HTMLElement,
     planets: Planet[],
+    bases: Base[],
     options: StarMapOptions = {},
 ): StarMapApi | undefined {
     let renderer: THREE.WebGLRenderer;
@@ -203,7 +274,8 @@ export function createStarMap(
         return undefined; // No WebGL available.
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
+    const canvas = renderer.domElement;
+    container.appendChild(canvas);
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 300);
@@ -216,9 +288,11 @@ export function createStarMap(
     scene.add(hub.group);
 
     const entries = planets.map(buildPlanet);
+    const entryById = new Map(entries.map((e) => [e.planet.id, e]));
     const dotMaterials = entries.map((e) => e.dotMaterial);
     const orbitMaterials = new Map<string, THREE.LineBasicMaterial>();
     const spokeMaterial = new THREE.LineBasicMaterial({ color: HOLO, transparent: true, opacity: 0.14 });
+    const baseEntries: BaseEntry[] = [];
 
     for (const entry of entries) {
         // Each planet's orbit ring has its own material so it can brighten on hover.
@@ -231,17 +305,35 @@ export function createStarMap(
         const from = entry.group.position.clone().multiplyScalar(0.2);
         const to = entry.group.position.clone().multiplyScalar(0.75);
         scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([from, to]), spokeMaterial));
+
+        // This planet's base markers.
+        for (const base of bases) {
+            if (base.planetId !== entry.planet.id) continue;
+            const baseEntry = makeBaseMarker(base, entry.planet.radius * 1.02, entry.planet.radius * 0.08);
+            entry.layer.add(baseEntry.marker);
+            baseEntries.push(baseEntry);
+        }
     }
 
-    // ----- Hover and selection -----
+    // ----- State -----
     const labels = options.labels ?? new Map<string, HTMLElement>();
+    const baseLabels = options.baseLabels ?? new Map<string, HTMLElement>();
     let hoveredId: string | null = null;
     let selectedId: string | null = null;
+    let focusedId: string | null = null; // the planet whose surface we are visiting
+    let hoveredBaseId: string | null = null;
+    let selectedBaseId: string | null = null;
+
+    const focusDir = new THREE.Vector3(); // direction from the planet toward the camera
+    const focusPos = new THREE.Vector3();
+    const focusLook = new THREE.Vector3();
+    let focusDist = 4;
+    let fit = 1;
 
     function setHover(id: string | null) {
         if (id === hoveredId) return;
         hoveredId = id;
-        renderer.domElement.style.cursor = id ? 'pointer' : 'default';
+        canvas.style.cursor = id ? 'pointer' : 'default';
         labels.forEach((el, key) => el.classList.toggle('is-hover', key === id));
     }
 
@@ -251,38 +343,112 @@ export function createStarMap(
         options.onSelect?.(id ? (planets.find((p) => p.id === id) ?? null) : null);
     }
 
-    // Shoot a line from the mouse into the scene and see which planet bubble it hits first.
+    function setBaseHover(id: string | null) {
+        if (id === hoveredBaseId) return;
+        hoveredBaseId = id;
+        canvas.style.cursor = id ? 'pointer' : 'default';
+        baseLabels.forEach((el, key) => el.classList.toggle('is-hover', key === id));
+    }
+
+    function selectBase(id: string | null) {
+        selectedBaseId = id;
+        baseLabels.forEach((el, key) => el.classList.toggle('is-selected', key === id));
+        options.onBaseSelect?.(id ? (bases.find((b) => b.id === id) ?? null) : null);
+    }
+
+    function enter(id: string) {
+        const entry = entryById.get(id);
+        if (!entry || focusedId) return;
+        // Approach from the side the camera is already on, a bit lower so we look more across the surface.
+        focusDir.set(0, CAMERA_HEIGHT * fit, CAMERA_DISTANCE * fit).sub(entry.group.position);
+        focusDir.y *= 0.55;
+        focusDir.normalize();
+        // Turn the marker layer so its "front" faces where the camera will end up.
+        entry.layer.quaternion.setFromUnitVectors(Z_AXIS, focusDir);
+
+        select(null);
+        setHover(null);
+        focusedId = id;
+        labels.forEach((el) => el.classList.add('is-away'));
+        options.onFocus?.(entry.planet);
+    }
+
+    function exit() {
+        if (!focusedId) return;
+        selectBase(null);
+        setBaseHover(null);
+        focusedId = null;
+        labels.forEach((el) => el.classList.remove('is-away'));
+        options.onFocus?.(null);
+    }
+
+    function back() {
+        if (selectedBaseId) selectBase(null);
+        else if (focusedId) exit();
+        else select(null);
+    }
+
+    // ----- Picking: shoot a line from the mouse into the scene and see what it hits first -----
     const raycaster = new THREE.Raycaster();
     const ndc = new THREE.Vector2();
-    const hitMeshes = entries.map((e) => e.hit);
+    const planetHits = entries.map((e) => e.hit);
 
-    function pick(event: MouseEvent): string | null {
-        const rect = renderer.domElement.getBoundingClientRect();
+    function aim(event: MouseEvent) {
+        const rect = canvas.getBoundingClientRect();
         ndc.set(
             ((event.clientX - rect.left) / rect.width) * 2 - 1,
             -((event.clientY - rect.top) / rect.height) * 2 + 1,
         );
         raycaster.setFromCamera(ndc, camera);
-        const hits = raycaster.intersectObjects(hitMeshes, false);
+    }
+
+    function pickPlanet(event: MouseEvent): string | null {
+        aim(event);
+        const hits = raycaster.intersectObjects(planetHits, false);
         return hits.length ? (hits[0].object.userData.planetId as string) : null;
     }
 
-    const canvas = renderer.domElement;
-    canvas.addEventListener('pointermove', (e) => setHover(pick(e)));
-    canvas.addEventListener('pointerleave', () => setHover(null));
-    canvas.addEventListener('click', (e) => select(pick(e))); // clicking empty space clears the selection
+    function pickBase(event: MouseEvent): string | null {
+        const focus = focusedId ? entryById.get(focusedId) : undefined;
+        if (!focus || focus.reveal < 0.6) return null; // markers are not out yet
+        aim(event);
+        const meshes = baseEntries.filter((b) => b.base.planetId === focusedId).map((b) => b.hit);
+        const hits = raycaster.intersectObjects(meshes, false);
+        return hits.length ? (hits[0].object.userData.baseId as string) : null;
+    }
+
+    canvas.addEventListener('pointermove', (e) => {
+        if (focusedId) setBaseHover(pickBase(e));
+        else setHover(pickPlanet(e));
+    });
+    canvas.addEventListener('pointerleave', () => {
+        setHover(null);
+        setBaseHover(null);
+    });
+    canvas.addEventListener('click', (e) => {
+        // Clicking empty space clears the current selection.
+        if (focusedId) selectBase(pickBase(e));
+        else select(pickPlanet(e));
+    });
 
     labels.forEach((el, id) => {
-        el.addEventListener('pointerenter', () => setHover(id));
+        el.addEventListener('pointerenter', () => { if (!focusedId) setHover(id); });
         el.addEventListener('pointerleave', () => setHover(null));
-        el.addEventListener('focus', () => setHover(id));
+        el.addEventListener('focus', () => { if (!focusedId) setHover(id); });
         el.addEventListener('blur', () => setHover(null));
-        el.addEventListener('click', () => select(id));
+        el.addEventListener('click', () => { if (!focusedId) select(id); });
+    });
+
+    baseLabels.forEach((el, id) => {
+        el.addEventListener('pointerenter', () => setBaseHover(id));
+        el.addEventListener('pointerleave', () => setBaseHover(null));
+        el.addEventListener('focus', () => setBaseHover(id));
+        el.addEventListener('blur', () => setBaseHover(null));
+        el.addEventListener('click', () => selectBase(id));
     });
 
     // ----- Sizing -----
     // Keep all three planets in view on narrow screens by pulling the camera back.
-    let fit = 1;
     function resize() {
         const w = container.clientWidth;
         const h = container.clientHeight;
@@ -309,10 +475,11 @@ export function createStarMap(
         });
     }
 
-    // ----- Labels follow their planets on screen -----
+    // ----- Labels follow their planets and markers on screen -----
     const worldPos = new THREE.Vector3();
     const edgePos = new THREE.Vector3();
     const camUp = new THREE.Vector3();
+    const camRight = new THREE.Vector3();
 
     function placeLabels() {
         const w = container.clientWidth;
@@ -336,9 +503,31 @@ export function createStarMap(
         }
     }
 
+    function placeBaseLabels() {
+        const w = container.clientWidth;
+        const h = container.clientHeight;
+
+        for (const be of baseEntries) {
+            const label = baseLabels.get(be.base.id);
+            if (!label) continue;
+
+            const owner = entryById.get(be.base.planetId);
+            const show = focusedId === be.base.planetId && !!owner && owner.reveal > 0.7;
+            label.classList.toggle('is-visible', show);
+            if (!show) continue;
+
+            be.marker.getWorldPosition(worldPos);
+            worldPos.project(camera);
+            const x = (worldPos.x * 0.5 + 0.5) * w;
+            const y = (-worldPos.y * 0.5 + 0.5) * h;
+            label.style.transform = `translate(${x + 18}px, ${y}px) translate(0, -50%)`;
+        }
+    }
+
     // ----- Animation loop -----
     const clock = new THREE.Clock();
     const cameraGoal = new THREE.Vector3();
+    const lookGoal = new THREE.Vector3();
 
     function frame() {
         const dt = Math.min(clock.getDelta(), 0.05);
@@ -346,36 +535,84 @@ export function createStarMap(
 
         for (const m of dotMaterials) m.uniforms.uTime.value = t;
 
+        // Where the camera should be if we are visiting a planet.
+        const focus = focusedId ? entryById.get(focusedId) : undefined;
+        if (focus) {
+            focusDist = focus.planet.radius * 3.4 * Math.max(1, 1 / camera.aspect);
+            focusLook.copy(focus.group.position);
+            focusPos.copy(focusLook).addScaledVector(focusDir, focusDist);
+        }
+        const arrived = !!focus && camera.position.distanceTo(focusPos) < focusDist * 0.45;
+
         entries.forEach((entry, i) => {
             const id = entry.planet.id;
-            const target = id === hoveredId || id === selectedId ? 1 : 0;
-            entry.glow += (target - entry.glow) * Math.min(1, dt * 8);
+            const focused = id === focusedId;
+            const away = focusedId !== null && !focused;
+            const glowTarget = focused ? 0.35 : id === hoveredId || id === selectedId ? 1 : 0;
 
-            entry.spin.rotation.y += dt * (reduced ? 0.02 : 0.12 + i * 0.03);
+            entry.glow += (glowTarget - entry.glow) * Math.min(1, dt * 8);
+            entry.dim += ((away ? 1 : 0) - entry.dim) * Math.min(1, dt * 4);
+            entry.reveal += ((focused && arrived ? 1 : 0) - entry.reveal) * Math.min(1, dt * 3);
+            entry.layer.visible = entry.reveal > 0.01;
+
+            entry.spin.rotation.y += dt * (reduced ? 0.02 : focused ? 0.03 : 0.12 + i * 0.03);
             entry.group.position.y = reduced ? 0 : Math.sin(t * 0.5 + i * 2.1) * 0.08;
             entry.group.scale.setScalar(1 + 0.1 * entry.glow);
             entry.dotMaterial.uniforms.uGlow.value = 0.7 + 0.8 * entry.glow;
-            entry.dotMaterial.uniforms.uOpacity.value = 0.9 + 0.1 * entry.glow;
+            entry.dotMaterial.uniforms.uOpacity.value = 0.9 + 0.1 * entry.glow - 0.6 * entry.dim;
+
             const orbitMaterial = orbitMaterials.get(id);
             if (orbitMaterial) orbitMaterial.opacity = 0.16 + 0.45 * entry.glow;
         });
+
+        for (const be of baseEntries) {
+            const owner = entryById.get(be.base.planetId);
+            const reveal = owner ? owner.reveal : 0;
+            const active = be.base.id === hoveredBaseId || be.base.id === selectedBaseId;
+
+            be.glow += ((active ? 1 : 0) - be.glow) * Math.min(1, dt * 8);
+            be.marker.scale.setScalar(Math.max(0.0001, reveal) * (1 + 0.4 * be.glow));
+
+            // The pulse ring expands outward and fades, over and over.
+            const phase = reduced ? 0.3 : (t * 0.5 + be.phase) % 1;
+            be.pulse.scale.setScalar(1 + phase * 1.6);
+            be.pulseMaterial.opacity = 0.55 * (1 - phase);
+            be.ringMaterial.opacity = 0.7 + 0.3 * be.glow;
+            be.beamMaterial.opacity = 0.45 + 0.5 * be.glow;
+        }
 
         hub.rings.forEach((ring, i) => {
             ring.rotation.y += dt * (reduced ? 0 : 0.3 + i * 0.2);
         });
         if (!reduced) stars.rotation.y += dt * 0.004;
 
-        // The camera drifts a little toward the mouse for depth.
-        cameraGoal.set(pointer.x * 0.9, CAMERA_HEIGHT * fit - pointer.y * 0.4, CAMERA_DISTANCE * fit);
-        camera.position.lerp(cameraGoal, 0.05);
+        // Camera: drift toward the mouse on the map, glide to the planet when visiting one.
+        if (focus) {
+            cameraGoal.copy(focusPos);
+            cameraGoal.x += pointer.x * 0.25;
+            cameraGoal.y -= pointer.y * 0.15;
+            lookGoal.copy(focusLook);
+            // With a detail panel open on a wide screen, slide the planet to the left to make room.
+            if (selectedBaseId && camera.aspect > 1.2) {
+                camRight.setFromMatrixColumn(camera.matrixWorld, 0);
+                lookGoal.addScaledVector(camRight, focusDist * 0.2);
+            }
+        } else {
+            cameraGoal.set(pointer.x * 0.9, CAMERA_HEIGHT * fit - pointer.y * 0.4, CAMERA_DISTANCE * fit);
+            lookGoal.set(0, 0, 0);
+        }
+        const k = reduced ? 1 : 1 - Math.exp(-dt * (focus ? 2.2 : 3));
+        camera.position.lerp(cameraGoal, k);
+        lookTarget.lerp(lookGoal, k);
         camera.lookAt(lookTarget);
         camera.updateMatrixWorld();
 
         placeLabels();
+        placeBaseLabels();
         renderer.render(scene, camera);
         requestAnimationFrame(frame);
     }
     frame();
 
-    return { select };
+    return { select, enter, exit, selectBase, back };
 }

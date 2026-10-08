@@ -1,6 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import { planets } from "../data/planets";
+import { bases } from "../data/bases";
 ---
 
 <Base title="Star Map | Tyler Irby">
@@ -22,12 +23,26 @@ import { planets } from "../data/planets";
             }
         </div>
 
+        <div class="labels">
+            {
+                bases.map((b) => (
+                    <button class="base-label" data-base={b.id} type="button">
+                        <span class="base-name">{b.name}</span>
+                        <span class="base-period">{b.period}</span>
+                    </button>
+                ))
+            }
+        </div>
+
         <header class="top-bar">
-            <a href="/" class="back">&lt; RETURN TO EARTH</a>
-            <span>STATUS: <b>ONLINE</b></span>
+            <a href="/" class="back" id="back-earth">&lt; RETURN TO EARTH</a>
+            <button type="button" id="back-map" class="back back-btn" hidden
+                >&lt; BACK TO STAR MAP</button
+            >
+            <span>STATUS: <b id="status">ONLINE</b></span>
         </header>
 
-        <p class="hint">SELECT A SECTOR</p>
+        <p class="hint" id="hint">SELECT A SECTOR</p>
 
         <aside id="planet-card" class="card" hidden aria-live="polite">
             <p class="card-field" id="card-field"></p>
@@ -36,6 +51,20 @@ import { planets } from "../data/planets";
             <div class="card-actions">
                 <button type="button" id="card-enter">ENTER SECTOR</button>
                 <button type="button" id="card-close" class="ghost"
+                    >CLOSE</button
+                >
+            </div>
+        </aside>
+
+        <aside id="base-card" class="card base-card" hidden aria-live="polite">
+            <p class="card-field" id="base-period"></p>
+            <h2 id="base-name"></h2>
+            <p class="base-role" id="base-role"></p>
+            <p class="card-blurb" id="base-summary"></p>
+            <ul class="highlights" id="base-highlights"></ul>
+            <div class="tags" id="base-tags"></div>
+            <div class="card-actions">
+                <button type="button" id="base-close" class="ghost"
                     >CLOSE</button
                 >
             </div>
@@ -84,6 +113,14 @@ import { planets } from "../data/planets";
         color: var(--holo-bright);
         text-shadow: 0 0 10px var(--holo-glow);
     }
+    .back-btn {
+        padding: 0;
+        background: none;
+        border: none;
+        font: inherit;
+        letter-spacing: inherit;
+        cursor: pointer;
+    }
 
     .hint {
         position: absolute;
@@ -98,7 +135,7 @@ import { planets } from "../data/planets";
         color: var(--holo-dim);
     }
 
-    /* ----- Planet labels ----- */
+    /* ----- Labels ----- */
     .labels {
         position: absolute;
         inset: 0;
@@ -106,16 +143,15 @@ import { planets } from "../data/planets";
         overflow: hidden;
         pointer-events: none;
     }
-    .planet-label {
+    .planet-label,
+    .base-label {
         position: absolute;
         left: 0;
         top: 0;
         pointer-events: auto;
         display: flex;
         flex-direction: column;
-        align-items: center;
         gap: 0.15rem;
-        padding: 0.35rem 0.8rem;
         background: rgba(2, 10, 22, 0.55);
         border: 1px solid rgba(79, 209, 255, 0.35);
         border-radius: 2px;
@@ -126,7 +162,13 @@ import { planets } from "../data/planets";
         transition:
             border-color 0.2s,
             background 0.2s,
-            box-shadow 0.2s;
+            box-shadow 0.2s,
+            opacity 0.4s,
+            visibility 0.4s;
+    }
+    .planet-label {
+        align-items: center;
+        padding: 0.35rem 0.8rem;
     }
     .name {
         font-family: var(--font-display);
@@ -142,14 +184,49 @@ import { planets } from "../data/planets";
     }
     .planet-label.is-hover,
     .planet-label.is-selected,
-    .planet-label:focus-visible {
+    .planet-label:focus-visible,
+    .base-label.is-hover,
+    .base-label.is-selected,
+    .base-label:focus-visible {
         outline: none;
         border-color: var(--holo-bright);
         background: rgba(79, 209, 255, 0.14);
         box-shadow: 0 0 18px var(--holo-glow);
     }
+    /* While visiting a planet, the other planets' labels fade out. */
+    .planet-label.is-away {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
 
-    /* ----- Info card ----- */
+    .base-label {
+        align-items: flex-start;
+        padding: 0.3rem 0.7rem;
+        border-left: 2px solid var(--holo);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+    .base-label.is-visible {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+    .base-name {
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 0.75rem;
+        letter-spacing: 0.16em;
+        color: var(--holo-bright);
+    }
+    .base-period {
+        font-size: 0.78rem;
+        letter-spacing: 0.14em;
+        color: var(--holo-dim);
+    }
+
+    /* ----- Cards ----- */
     .card {
         position: absolute;
         left: 0;
@@ -216,8 +293,69 @@ import { planets } from "../data/planets";
         color: var(--holo-dim);
     }
 
+    /* ----- Base detail panel ----- */
+    .base-card {
+        max-height: 55svh;
+        overflow: auto;
+    }
+    .base-card h2 {
+        font-size: 1.25rem;
+        letter-spacing: 0.14em;
+    }
+    .base-role {
+        margin: 0 0 0.8rem;
+        font-size: 0.95rem;
+        letter-spacing: 0.16em;
+        color: var(--holo-dim);
+    }
+    .highlights {
+        margin: 0 0 0.9rem;
+        padding: 0;
+        list-style: none;
+    }
+    /* :global is needed because these items are created by JavaScript */
+    .highlights :global(li) {
+        position: relative;
+        padding-left: 1.1rem;
+        margin-bottom: 0.35rem;
+        color: var(--holo);
+    }
+    .highlights :global(li)::before {
+        content: ">";
+        position: absolute;
+        left: 0;
+        color: var(--holo-dim);
+    }
+    .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        margin-bottom: 1rem;
+    }
+    .tags :global(span) {
+        padding: 0.15rem 0.6rem;
+        font-size: 0.85rem;
+        letter-spacing: 0.1em;
+        color: var(--holo-bright);
+        border: 1px solid rgba(79, 209, 255, 0.4);
+        border-radius: 2px;
+        background: rgba(79, 209, 255, 0.08);
+    }
+
+    @media (min-width: 800px) {
+        .base-card {
+            left: auto;
+            right: 1.5rem;
+            top: 5rem;
+            bottom: 4rem;
+            margin: 0;
+            width: 380px;
+            max-height: none;
+        }
+    }
     @media (max-width: 700px) {
-        .field {
+        .field,
+        .base-period {
             display: none;
         }
     }
@@ -226,48 +364,94 @@ import { planets } from "../data/planets";
 <script>
     import { createStarMap } from "../scripts/starmap";
     import { planets } from "../data/planets";
+    import { bases } from "../data/bases";
 
-    const stage = document.getElementById("map-stage");
-    const card = document.getElementById("planet-card") as HTMLElement;
-    const cardName = document.getElementById("card-name") as HTMLElement;
-    const cardField = document.getElementById("card-field") as HTMLElement;
-    const cardBlurb = document.getElementById("card-blurb") as HTMLElement;
-    const enterButton = document.getElementById(
-        "card-enter",
-    ) as HTMLButtonElement;
-    const closeButton = document.getElementById(
-        "card-close",
-    ) as HTMLButtonElement;
+    const $ = <T extends HTMLElement>(id: string) =>
+        document.getElementById(id) as T;
+
+    const stage = $("map-stage");
+    const hint = $("hint");
+    const status = $("status");
+    const backEarth = $("back-earth");
+    const backMap = $("back-map");
+
+    const planetCard = $("planet-card");
+    const cardName = $("card-name");
+    const cardField = $("card-field");
+    const cardBlurb = $("card-blurb");
+    const enterButton = $<HTMLButtonElement>("card-enter");
+    const closeButton = $<HTMLButtonElement>("card-close");
+
+    const baseCard = $("base-card");
+    const basePeriod = $("base-period");
+    const baseName = $("base-name");
+    const baseRole = $("base-role");
+    const baseSummary = $("base-summary");
+    const baseHighlights = $("base-highlights");
+    const baseTags = $("base-tags");
+    const baseClose = $<HTMLButtonElement>("base-close");
 
     const labels = new Map<string, HTMLElement>();
     document.querySelectorAll<HTMLElement>("[data-planet]").forEach((el) => {
         if (el.dataset.planet) labels.set(el.dataset.planet, el);
     });
+    const baseLabels = new Map<string, HTMLElement>();
+    document.querySelectorAll<HTMLElement>("[data-base]").forEach((el) => {
+        if (el.dataset.base) baseLabels.set(el.dataset.base, el);
+    });
 
     let currentId: string | null = null;
 
-    const map = stage
-        ? createStarMap(stage, planets, {
-              labels,
-              onSelect(planet) {
-                  currentId = planet ? planet.id : null;
-                  card.hidden = !planet;
-                  if (planet) {
-                      cardName.textContent = planet.name;
-                      cardField.textContent = planet.field;
-                      cardBlurb.textContent = planet.blurb;
-                  }
-              },
-          })
-        : undefined;
-
-    closeButton.addEventListener("click", () => map?.select(null));
-    window.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") map?.select(null);
+    const map = createStarMap(stage, planets, bases, {
+        labels,
+        baseLabels,
+        onSelect(planet) {
+            currentId = planet ? planet.id : null;
+            planetCard.hidden = !planet;
+            if (planet) {
+                cardName.textContent = planet.name;
+                cardField.textContent = planet.field;
+                cardBlurb.textContent = planet.blurb;
+            }
+        },
+        onFocus(planet) {
+            const visiting = !!planet;
+            backEarth.hidden = visiting;
+            backMap.hidden = !visiting;
+            status.textContent = planet ? `SECTOR ${planet.name}` : "ONLINE";
+            hint.textContent = visiting ? "SELECT A BASE" : "SELECT A SECTOR";
+        },
+        onBaseSelect(base) {
+            baseCard.hidden = !base;
+            if (!base) return;
+            baseName.textContent = base.name;
+            baseRole.textContent = base.role;
+            basePeriod.textContent = base.period;
+            baseSummary.textContent = base.summary;
+            baseHighlights.replaceChildren(
+                ...base.highlights.map((text) => {
+                    const li = document.createElement("li");
+                    li.textContent = text;
+                    return li;
+                }),
+            );
+            baseTags.replaceChildren(
+                ...base.tags.map((text) => {
+                    const tag = document.createElement("span");
+                    tag.textContent = text;
+                    return tag;
+                }),
+            );
+        },
     });
 
     enterButton.addEventListener("click", () => {
-        // Step 5 turns this into the zoom down to the planet's surface.
-        console.log("Enter sector:", currentId);
+        if (currentId) map?.enter(currentId);
+    });
+    closeButton.addEventListener("click", () => map?.select(null));
+    baseClose.addEventListener("click", () => map?.selectBase(null));
+    backMap.addEventListener("click", () => map?.exit());
+    window.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") map?.back();
     });
 </script>
