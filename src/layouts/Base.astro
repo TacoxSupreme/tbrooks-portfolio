@@ -1,0 +1,26 @@
+---
+import "@fontsource/orbitron/400.css";
+import "@fontsource/orbitron/700.css";
+import "@fontsource/rajdhani/500.css";
+import "@fontsource/rajdhani/700.css";
+import "../styles/global.css";
+
+interface Props {
+    title: string;
+}
+const { title } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>{title}</title>
+    </head>
+    <body>
+        <div class="stars"></div>
+        <slot />
+        <div class="scanlines"></div>
+    </body>
+</html>
