@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { HOLO, makeGlobeBody, makeGrid, makeDotMaterial, latLonToVector3 } from './earth';
+import { getQuality } from './quality';
+import { startLoop } from './loop';
 import type { Planet } from '../data/planets';
 import type { Base } from '../data/bases'; 
 
@@ -58,8 +60,9 @@ function circleLine(radius: number, material: THREE.Material, segments = 128): T
 }
 
 function makePlanetDots(planet: Planet): THREE.Points {
-    const total = 2000;
-    const golden = Math.PI * (3 - Math.sqrt(5)); // spreads points evenly over a sphere
+    const total = getQuality().planetDots;
+    console.log('planetDots', total, getQuality());
+    const golden = Math.PI * (3 - Math.sqrt(5)); // spreads points evenly over a sphere 
     const kept: number[] = [];
 
     for (let i = 0; i < total; i++) {
@@ -82,7 +85,12 @@ function makePlanetDots(planet: Planet): THREE.Points {
     for (let i = 0; i < seeds.length; i++) seeds[i] = Math.random();
     geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
 
-    return new THREE.Points(geometry, makeDotMaterial({ size: 0.14 * planet.radius }));
+    return new THREE.Points(
+        geometry,
+        makeDotMaterial({
+            size: 0.14 * planet.radius * Math.sqrt(4200 / total),
+            cullBack: getQuality().cullBack,
+         }));
 }
 
 function makeRing(planet: Planet): THREE.Group {
@@ -168,7 +176,7 @@ function buildPlanet(planet: Planet): PlanetEntry {
     tilt.rotation.z = THREE.MathUtils.degToRad(planet.tiltDeg);
     const spin = new THREE.Group();
     spin.scale.setScalar(planet.radius);
-    spin.add(makeGlobeBody(1), makeGrid(1.003, 30), dots);
+    spin.add(makeGlobeBody(1, getQuality().sphereSegments), makeGrid(1.003, 30), dots);
     tilt.add(spin);
     group.add(tilt);
 
@@ -207,7 +215,7 @@ function buildHub(): { group: THREE.Group; rings: THREE.LineLoop[] } {
             }),
         ),
     );
-    group.add(makeGlobeBody(0.75));
+    group.add(makeGlobeBody(0.75, Math.min(32, getQuality().sphereSegments)));
 
     const material = new THREE.LineBasicMaterial({ color: HOLO, transparent: true, opacity: 0.5 });
     const rings: THREE.LineLoop[] = [];
@@ -269,11 +277,16 @@ export function createStarMap(
 ): StarMapApi | undefined {
     let renderer: THREE.WebGLRenderer;
     try {
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer = new THREE.WebGLRenderer({
+            antialias: getQuality().antialias,
+            alpha: true,
+            powerPreference: 'high-performance',
+        });
     } catch {
-        return undefined; // No WebGL available.
+        return undefined;
     }
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, getQuality().pixelRatio));
+
     const canvas = renderer.domElement;
     container.appendChild(canvas);
 
@@ -281,7 +294,7 @@ export function createStarMap(
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 300);
     const lookTarget = new THREE.Vector3(0, 0, 0);
 
-    const stars = makeStars();
+    const stars = makeStars(getQuality().stars);
     scene.add(stars);
 
     const hub = buildHub();
@@ -448,11 +461,17 @@ export function createStarMap(
     });
 
     // ----- Sizing -----
-    // Keep all three planets in view on narrow screens by pulling the camera back.
+    //fits camera to screen scale 
+
+    let viewW = 1;
+    let viewH = 1;
+
     function resize() {
         const w = container.clientWidth;
         const h = container.clientHeight;
         if (!w || !h) return;
+        viewW = w;
+        viewH = h;
         renderer.setSize(w, h, false);
         camera.aspect = w / h;
         camera.updateProjectionMatrix();
@@ -482,8 +501,8 @@ export function createStarMap(
     const camRight = new THREE.Vector3();
 
     function placeLabels() {
-        const w = container.clientWidth;
-        const h = container.clientHeight;
+        const w = viewW;
+        const h = viewH;
         camUp.setFromMatrixColumn(camera.matrixWorld, 1);
 
         for (const entry of entries) {
@@ -504,8 +523,8 @@ export function createStarMap(
     }
 
     function placeBaseLabels() {
-        const w = container.clientWidth;
-        const h = container.clientHeight;
+        const w = viewW;
+        const h = viewH;
 
         for (const be of baseEntries) {
             const label = baseLabels.get(be.base.id);
@@ -525,14 +544,10 @@ export function createStarMap(
     }
 
     // ----- Animation loop -----
-    const clock = new THREE.Clock();
     const cameraGoal = new THREE.Vector3();
     const lookGoal = new THREE.Vector3();
 
-    function frame() {
-        const dt = Math.min(clock.getDelta(), 0.05);
-        const t = clock.elapsedTime;
-
+    function update(dt: number, t: number) {
         for (const m of dotMaterials) m.uniforms.uTime.value = t;
 
         // Where the camera should be if we are visiting a planet.
@@ -610,9 +625,17 @@ export function createStarMap(
         placeLabels();
         placeBaseLabels();
         renderer.render(scene, camera);
-        requestAnimationFrame(frame);
     }
-    frame();
+
+    let ratio = renderer.getPixelRatio();
+    function lowerResolution() {
+        if (ratio <= 0.75) return;
+        ratio = Math.max(0.75, ratio - 0.25);
+        renderer.setPixelRatio(ratio);
+        resize();
+    }
+
+    startLoop({ update, onSlow: lowerResolution });
 
     return { select, enter, exit, selectBase, back };
 }

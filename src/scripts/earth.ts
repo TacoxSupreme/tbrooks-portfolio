@@ -1,6 +1,7 @@
+import { getQuality } from './quality'
 import * as THREE from 'three';
 import landDots from '../data/land-dots.json';
-
+import { startLoop } from './loop';
 
 export const HOLO = 0x4fd1ff;
 
@@ -26,7 +27,7 @@ const fragmentShader = `
   }
 `;
 
-export function makeGlobeBody(radius: number): THREE.Mesh {
+export function makeGlobeBody(radius: number, segments = 64): THREE.Mesh {
   const material = new THREE.ShaderMaterial({
     uniforms: { uColor: { value: new THREE.Color(HOLO) } },
     vertexShader,
@@ -35,7 +36,7 @@ export function makeGlobeBody(radius: number): THREE.Mesh {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
-  return new THREE.Mesh(new THREE.SphereGeometry(radius, 64, 64), material);
+  return new THREE.Mesh(new THREE.SphereGeometry(radius, segments, segments), material);
 }
 
 // Latitude rings and longitude lines, like a map grid wrapped around the sphere.
@@ -116,12 +117,13 @@ const dotFragmentShader = `
   uniform vec3 uColor;
   uniform float uOpacity;
   uniform float uGlow;
+  uniform float uCullBack;
   varying float vFacing;
   varying float vFlicker;
   void main() {
     // 0 at the middle of the dot, 1 at the edge of its square.
     float d = length(gl_PointCoord - vec2(0.5)) * 2.0;
-    if (d > 1.0) discard;
+    if (uCullBack > 0.5 && vFacing < 0.0) discard;
 
     float core = smoothstep(0.4, 0.0, d);     // small, bright center
     float halo = pow(1.0 - d, 3.0) * uGlow;   // wide, soft glow around it
@@ -134,57 +136,20 @@ const dotFragmentShader = `
   }
 `;
 
-  export function makeDotMaterial(
-    options: { size?: number; glow?: number; opacity?: number; color?: number } = {},
-  ): THREE.ShaderMaterial {
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    return new THREE.ShaderMaterial({
-      uniforms: {
-        uColor: { value: new THREE.Color(options.color ?? 0xb8ecff) },
-        uSize: { value: options.size ?? 0.075 },
-        uGlow: { value: options.glow ?? 0.7 },
-        uOpacity: { value: options.opacity ?? 0.9 },
-        uTwinkle: { value: reduced ? 0 : 0.25 },
-        uTime: { value: 0 },
-        uScale: { value: 300 },
-      },
-      vertexShader: dotVertexShader,
-      fragmentShader: dotFragmentShader,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-  }
-
-function makeLandDots(radius: number): THREE.Points {
-  const count = landDots.length / 2;
-  const positions = new Float32Array(count * 3);
-  const seeds = new Float32Array(count);
-  const point = new THREE.Vector3();
-
-  for (let i = 0; i < count; i++) {
-    const lon = landDots[i * 2];
-    const lat = landDots[i * 2 + 1];
-    latLonToVector3(lat, lon, radius, point);
-    positions.set([point.x, point.y, point.z], i * 3);
-    seeds[i] = Math.random();
-  }
-
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
-
+export function makeDotMaterial(
+  options: { size?: number; glow?: number; opacity?: number; color?: number; cullBack?: boolean } = {},
+): THREE.ShaderMaterial {
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  const material = new THREE.ShaderMaterial({
+  return new THREE.ShaderMaterial({
     uniforms: {
-      uColor: { value: new THREE.Color(0xb8ecff) },
-      uSize: { value: 0.075 },   // size of each dot including its glow, in world units
-      uGlow: { value: 0.7 },     // halo strength
-      uOpacity: { value: 0.9 },  // overall brightness
-      uTwinkle: { value: reduced ? 0 : 0.25 }, // 0 = steady, higher = more shimmer
+      uColor: { value: new THREE.Color(options.color ?? 0xb8ecff) },
+      uSize: { value: options.size ?? 0.075 },
+      uGlow: { value: options.glow ?? 0.7 },
+      uOpacity: { value: options.opacity ?? 0.9 },
+      uTwinkle: { value: reduced ? 0 : 0.25 },
       uTime: { value: 0 },
-      uScale: { value: 300 },    // updated on resize
+      uScale: { value: 300 },
+      uCullBack: { value: options.cullBack ? 1 : 0 },
     },
     vertexShader: dotVertexShader,
     fragmentShader: dotFragmentShader,
@@ -192,19 +157,41 @@ function makeLandDots(radius: number): THREE.Points {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
   });
+}
 
+function makeLandDots(radius: number, stride: number): THREE.Points {
+  const used = Math.ceil(landDots.length / 2 / stride);
+  const positions = new Float32Array(used * 3);
+  const seeds = new Float32Array(used);
+  const point = new THREE.Vector3();
+
+  for (let j = 0; j < used; j++) {
+    const i = j * stride;
+    latLonToVector3(landDots[i * 2 + 1], landDots[i * 2], radius, point);
+    positions.set([point.x, point.y, point.z], j * 3);
+    seeds[j] = Math.random();
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('aSeed', new THREE.BufferAttribute(seeds, 1));
+
+
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const material = makeDotMaterial({ size: 0.075 * Math.sqrt(stride) });
   return new THREE.Points(geometry, material);
 }
 
 export function createEarth(container: HTMLElement): void {
+  const q = getQuality();
   let renderer: THREE.WebGLRenderer;
   try {
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer = new THREE.WebGLRenderer({ antialias: q.antialias, alpha: true, powerPreference: 'high-performance' });
   } catch {
     return; // No WebGL: the CSS rings stay as a fallback.
   }
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, q.pixelRatio));
   container.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
@@ -219,9 +206,9 @@ export function createEarth(container: HTMLElement): void {
   tilt.add(spin);
   scene.add(tilt);
 
-  spin.add(makeGlobeBody(1));
+  spin.add(makeGlobeBody(1, q.sphereSegments));
   spin.add(makeGrid(1.003));
-  const landPoints = makeLandDots(1.006);
+  const landPoints = makeLandDots(1.006, q.landStride);
   const dotUniforms = (landPoints.material as THREE.ShaderMaterial).uniforms;
   spin.add(landPoints);
   spin.rotation.y = THREE.MathUtils.degToRad(88); // start facing the Americas
@@ -240,14 +227,22 @@ export function createEarth(container: HTMLElement): void {
   resize();
 
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const clock = new THREE.Clock();
 
-  function frame() {
-    const dt = clock.getDelta();
-    dotUniforms.uTime.value = clock.elapsedTime;
-    spin.rotation.y += dt * (reduced ? 0.02 : 0.18);
-    renderer.render(scene, camera);
-    requestAnimationFrame(frame);
+  // If the device keeps missing frames, drop the resolution a notch (never below 0.75x).
+  let ratio = renderer.getPixelRatio();
+  function lowerResolution() {
+    if (ratio <= 0.75) return;
+    ratio = Math.max(0.75, ratio - 0.25);
+    renderer.setPixelRatio(ratio);
+    resize();
   }
-  frame();
+
+  startLoop({
+    update(dt, t) {
+      dotUniforms.uTime.value = t;
+      spin.rotation.y += dt * (reduced ? 0.02 : 0.18);
+      renderer.render(scene, camera);
+    },
+    onSlow: lowerResolution,
+  });
 }
