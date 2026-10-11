@@ -362,7 +362,7 @@ import { bases } from "../data/bases";
 </style>
 
 <script>
-    import { createStarMap } from "../scripts/starmap";
+    import type { StarMapApi } from "../scripts/starmap";
     import { planets } from "../data/planets";
     import { bases } from "../data/bases";
 
@@ -400,49 +400,21 @@ import { bases } from "../data/bases";
         if (el.dataset.base) baseLabels.set(el.dataset.base, el);
     });
 
-    let currentId: string | null = null;
+    let map: StarMapApi | undefined;
 
-    const map = createStarMap(stage, planets, bases, {
-        labels,
-        baseLabels,
-        onSelect(planet) {
-            currentId = planet ? planet.id : null;
-            planetCard.hidden = !planet;
-            if (planet) {
-                cardName.textContent = planet.name;
-                cardField.textContent = planet.field;
-                cardBlurb.textContent = planet.blurb;
-            }
-        },
-        onFocus(planet) {
-            const visiting = !!planet;
-            backEarth.hidden = visiting;
-            backMap.hidden = !visiting;
-            status.textContent = planet ? `SECTOR ${planet.name}` : "ONLINE";
-            hint.textContent = visiting ? "SELECT A BASE" : "SELECT A SECTOR";
-        },
-        onBaseSelect(base) {
-            baseCard.hidden = !base;
-            if (!base) return;
-            baseName.textContent = base.name;
-            baseRole.textContent = base.role;
-            basePeriod.textContent = base.period;
-            baseSummary.textContent = base.summary;
-            baseHighlights.replaceChildren(
-                ...base.highlights.map((text) => {
-                    const li = document.createElement("li");
-                    li.textContent = text;
-                    return li;
-                }),
-            );
-            baseTags.replaceChildren(
-                ...base.tags.map((text) => {
-                    const tag = document.createElement("span");
-                    tag.textContent = text;
-                    return tag;
-                }),
-            );
-        },
+    import("../scripts/starmap").then(({ createStarMap }) => {
+        map = createStarMap(stage, planets, bases, {
+            // ...your existing options object, unchanged...
+        });
+
+        // Fade the labels in after the first frames, so they do not flash in the corner.
+        requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+                document
+                    .querySelectorAll(".labels")
+                    .forEach((el) => el.classList.add("ready"));
+            }),
+        );
     });
 
     enterButton.addEventListener("click", () => {

@@ -1,5 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
+import { createEarth } from "../scripts/earth";
 ---
 
 <Base title="Tyler Irby | Information System">
@@ -17,9 +18,7 @@ import Base from "../layouts/Base.astro";
 			</div>
 
 			<h1>TYLER'S PORTFOLIO</h1>
-			<p class="tagline">
-				ACTIVATE SYSTEM FOR ENTRY
-			</p>
+			<p class="tagline">ACTIVATE SYSTEM FOR ENTRY</p>
 
 			<button id="activate" type="button"
 				>ACTIVATE INFORMATION SYSTEM</button
@@ -165,7 +164,19 @@ import Base from "../layouts/Base.astro";
 	import { createEarth } from "../scripts/earth";
 
 	const stage = document.getElementById("earth-stage");
-	if (stage) createEarth(stage);
+	if (stage) {
+		const stage = document.getElementById("earth-stage");
+		if (stage) {
+			// Let the page paint first, then load Three.js.
+			const start = () =>
+				import("../scripts/earth").then(({ createEarth }) =>
+					createEarth(stage),
+				);
+			if ("requestIdleCallback" in window)
+				requestIdleCallback(start, { timeout: 800 });
+			else setTimeout(start, 200);
+		}
+	}
 
 	const button = document.getElementById("activate") as HTMLButtonElement;
 	const log = document.getElementById("boot-log") as HTMLUListElement;
