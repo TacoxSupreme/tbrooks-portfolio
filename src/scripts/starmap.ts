@@ -61,7 +61,6 @@ function circleLine(radius: number, material: THREE.Material, segments = 128): T
 
 function makePlanetDots(planet: Planet): THREE.Points {
     const total = getQuality().planetDots;
-    console.log('planetDots', total, getQuality());
     const golden = Math.PI * (3 - Math.sqrt(5)); // spreads points evenly over a sphere 
     const kept: number[] = [];
 
@@ -480,6 +479,8 @@ export function createStarMap(
         const scale =
             (h * renderer.getPixelRatio()) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2));
         for (const m of dotMaterials) m.uniforms.uScale.value = scale;
+
+        
     }
     new ResizeObserver(resize).observe(container);
     resize();

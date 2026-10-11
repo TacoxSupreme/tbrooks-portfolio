@@ -24,7 +24,7 @@ export const bases: Base[] = [
         highlights: [TODO_HIGHLIGHT], tags: ['Kitchen'], lat: 24, lon: -26,
     },
     {
-        id: 'heros', planetId: 'food', name: "Hero's Sports Bar",
+        id: 'heroes', planetId: 'food', name: "Hero's Sports Bar",
         role: TODO_ROLE, period: TODO_DATES,
         summary: 'Replace this with a sentence or two about the job.',
         highlights: [TODO_HIGHLIGHT], tags: ['Kitchen'], lat: 14, lon: 26,
