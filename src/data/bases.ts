@@ -1,7 +1,7 @@
 export interface BaseImage {
     src: string;        // for example '/images/bases/royal-scam/01.webp'
     alt: string;        // describe the photo for screen readers
-    caption: string;
+    caption?: string;
 }
 
 export interface BaseLink {
@@ -20,9 +20,9 @@ export interface Base {
     tags: string[];
     lat: number;        // up/down on the planet's face
     lon: number;        // left/right on the planet's face
-    story: string[];   // paragraphs of text
-    images: BaseImage[];
-    links: BaseLink[];
+    story?: string[];   // paragraphs of text
+    images?: BaseImage[];
+    links?: BaseLink[];
 }
 
 const TODO_ROLE = 'ADD YOUR TITLE';
@@ -39,7 +39,10 @@ export const bases: Base[] = [
         story: [
             'Test paragraph one.',
         ],
-        images: [],
+        images: [
+            { src: '/images/bases/royal-scam/01.webp', alt: 'Describe what the photo shows' },
+
+        ],
         links: [
             { label: 'Test link', url: 'https://example.com' },
         ],
