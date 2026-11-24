@@ -103,28 +103,49 @@ export const bases: Base[] = [
     // ---------- PIXELON: Game Development ----------
     {
         id: 'exploring-digital', planetId: 'games', name: 'Exploring Digital',
-        role: TODO_ROLE, period: TODO_DATES,
+        role: 'Game Developer', period: '2022 - 2024',
         summary: 'Unity VR 4D experiences: C# scripting, motion capture integration, story, music, and 3D art.',
-        highlights: [TODO_HIGHLIGHT], tags: ['Unity', 'C#', 'VR', 'Mocap'], lat: 16, lon: -24,
+        highlights: [ 'This Role I poured my creativitiy into and wouldnt have traded it for the world.'], tags: ['Unity', 'C#', 'VR', 'Mocap'], lat: 16, lon: -24,
         story: [
-            'Test paragraph one.',
+            'This is where we poured our blood sweat and tears into to making fun 10min Experiences for a myriad of customers. My team and I worked hard to push out 8 different experiences in short timeframes to meet demands for clients. All around a ton of fun.',
         ],
-        images: [],
+        images: [
+            { src: 'public/images/bases/exploring-digital/01.webp', alt: 'Describe what the photo shows' },
+            { src: 'public/images/bases/exploring-digital/02.webp', alt: 'Describe what the photo shows' },
+            { src: 'public/images/bases/exploring-digital/03.webp', alt: 'Describe what the photo shows' },
+            { src: 'public/images/bases/exploring-digital/04.webp', alt: 'Describe what the photo shows' },
+            { src: 'public/images/bases/exploring-digital/05.webp', alt: 'Describe what the photo shows' },
+        ],
         links: [
-            { label: 'Test link', url: 'https://example.com' },
+            { label: 'Exploring Digital LinkedIn', url: 'https://www.linkedin.com/feed/update/urn:li:activity:7082071074850443264/' },
+            { label: 'Art Station', url: 'https://www.artstation.com/redclay3d' },
+            { label: 'Customer Advertisement', url: 'https://youtu.be/c-Fn51rVFog?si=E723qoJpRbVnUUYR' },
+            { label: 'MegaVerse Website', url: 'https://www.megaversevr.com/website/home/?fbclid=IwY2xjawU8YpZleHRuA2FlbQIxMABwZG9mBXNydGMGYXBwX2lkEDIyMjAzOTE3ODgyMDA4OTIAAR7zmxj18TH8ccdLy0B-fuAfakynO3UZo7Km6V1JVXyepvjMlJTz-pO0mXzRgA_aem_f-PuRgb9-MbiQdVOqbcU7A' },
+
+
         ],
     },
     {
         id: 'third-realm', planetId: 'games', name: '3rd Realm Creations',
-        role: TODO_ROLE, period: TODO_DATES,
+        role: 'Virtual Production Technician', period: '2022 - 2024',
         summary: 'Virtual production in Unreal Engine with Rokoko mocap suits, Vive tracking, and LED volume walls.',
-        highlights: [TODO_HIGHLIGHT], tags: ['Unreal Engine', 'Rokoko', 'Vive', 'LED volume'], lat: -10, lon: 18,
+        highlights: [ 'Here is where I found my love with messing with tech new and old to make anything possible.'], 
+        tags: ['Unreal Engine', 'Rokoko', 'Vive', 'LED volume'], lat: -10, lon: 18,
         story: [
-            'Test paragraph one.',
+            'Photos and links of fun and shenanigans we would get ourselves into to find our next big project.',
         ],
-        images: [],
+        images: [
+            { src: 'public/images/bases/third-realm/01.webp', alt: 'Describe what the photo shows' },
+            { src: 'public/images/bases/third-realm/02.webp', alt: 'Describe what the photo shows' },
+            { src: 'public/images/bases/third-realm/03.webp', alt: 'Describe what the photo shows' },
+            { src: 'public/images/bases/third-realm/04.webp', alt: 'Describe what the photo shows' },
+            { src: 'public/images/bases/third-realm/05.webp', alt: 'Describe what the photo shows' },
+            { src: 'public/images/bases/third-realm/06.webp', alt: 'Describe what the photo shows' },
+            { src: 'public/images/bases/third-realm/07.webp', alt: 'Describe what the photo shows' },
+        ],
         links: [
-            { label: 'Test link', url: 'https://example.com' },
+            { label: 'News Coverage', url: 'https://www.youtube.com/watch?v=J11-ZrFHg-M' },
+            { label: 'Art Station', url: 'https://www.artstation.com/redclay3d' },
         ],
     },
 
